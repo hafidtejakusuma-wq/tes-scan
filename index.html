@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>SPX Express Turbo Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+    :root {
+      --bg-dark: #070402;
+      --bg-card: rgba(18, 11, 7, 0.84);
+      --orange-neon: #ff5500;
+      --orange-bright: #ff8c00;
+      --orange-glow: rgba(255, 85, 0, 0.45);
+      --orange-dim: rgba(255, 85, 0, 0.14);
+      --green-neon: #10b981;
+      --yellow-neon: #f59e0b;
+      --red-neon: #ef4444;
+      --text-main: #f4f4f5;
+      --text-sub: #d4d4d8;
+      --border-color: rgba(255, 107, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body { 
+      margin: 0; padding: 16px; 
+      background: var(--bg-dark); 
+      color: var(--text-main); 
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* =========================================================
+       1. VIDEO BACKGROUND HUD ASLI (bg-hud.mp4.mp4) BERWARNA ORANGE
+       ========================================================= */
+    .bg-video-layer {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      object-fit: cover;
+      filter: hue-rotate(175deg) saturate(280%) brightness(0.8) contrast(1.18);
+      z-index: -2;
+      pointer-events: none;
+    }
+
+    .bg-hud-overlay {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(15, 8, 3, 0.3) 0%, rgba(5, 3, 2, 0.8) 100%);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    /* =========================================================
+       2. MASKOT ROBOT GIF POJOK KIRI ATAS (mix-blend-mode: screen)
+       ========================================================= */
+    .robot-mascot {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      width: 90px;
+      height: auto;
+      z-index: 999;
+      pointer-events: none;
+      /* Menghilangkan background hitam pekat menjadi transparan menyatu dengan HUD */
+      mix-blend-mode: screen;
+      filter: drop-shadow(0 6px 14px rgba(255, 85, 0, 0.55));
+      animation: robotFloat 3.2s ease-in-out infinite;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .robot-mascot.robot-happy {
+      animation: robotCheer 0.55s ease;
+    }
+
+    @keyframes robotFloat {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50%      { transform: translateY(-7px) rotate(2.5deg); }
+    }
+    @keyframes robotCheer {
+      0%   { transform: scale(1) translateY(0); }
+      35%  { transform: scale(1.16) translateY(-10px) rotate(6deg); }
+      70%  { transform: scale(0.96) translateY(2px) rotate(-3deg); }
+      100% { transform: scale(1) translateY(0); }
+    }
+
+    /* =========================================================
+       3. LAYOUT & LOGO TENGAH
+       ========================================================= */
+    .container { max-width: 480px; margin: 0 auto; position: relative; z-index: 1; }
+    
+    .header { 
+      text-align: center; 
+      margin-top: 10px;
+      margin-bottom: 18px; 
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .center-logo {
+      width: 170px;
+      max-width: 58%;
+      height: auto;
+      display: block;
+      margin: 0 auto 6px auto;
+      filter: drop-shadow(0 0 14px rgba(255, 85, 0, 0.7));
+      transition: transform 0.3s ease;
+    }
+    .header p { 
+      margin: 2px 0 0; font-size: 11px; font-weight: 700;
+      color: var(--orange-bright); letter-spacing: 1.6px; 
+      text-shadow: 0 0 8px rgba(0, 0, 0, 0.95);
+    }
+
+    /* Kartu Glassmorphism */
+    .card { 
+      background: var(--bg-card); 
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 16px; padding: 16px; margin-bottom: 14px; 
+      border: 1px solid var(--border-color);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), inset 0 0 15px rgba(255, 85, 0, 0.06);
+      position: relative; overflow: hidden;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--orange-neon), transparent);
+    }
+
+    label { display: block; font-size: 11px; font-weight: 700; color: var(--text-sub); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+    
+    select, input[type="text"] {
+      width: 100%; padding: 13px; border-radius: 12px; border: 1px solid var(--border-color);
+      background: rgba(0, 0, 0, 0.88); color: var(--text-main); font-size: 15px; font-weight: 600;
+      outline: none; transition: all 0.25s ease;
+    }
+    select:focus, input[type="text"]:focus { 
+      border-color: var(--orange-neon); 
+      box-shadow: 0 0 0 3px var(--orange-dim); 
+    }
+    select.select-empty {
+      color: var(--orange-bright);
+      border-color: rgba(255, 140, 0, 0.6);
+    }
+
+    /* =========================================================
+       4. SKELETON SCREEN (SAAT MEMUAT DAFTAR KURIR)
+       ========================================================= */
+    .skeleton-box {
+      width: 100%;
+      height: 46px;
+      border-radius: 12px;
+      background: linear-gradient(
+        110deg,
+        rgba(35, 22, 14, 0.9) 25%,
+        rgba(255, 95, 0, 0.25) 50%,
+        rgba(35, 22, 14, 0.9) 75%
+      );
+      background-size: 200% 100%;
+      border: 1px solid rgba(255, 107, 0, 0.25);
+      animation: skeletonShimmer 1.3s infinite linear;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      font-size: 12px;
+      color: rgba(255, 160, 80, 0.75);
+      letter-spacing: 0.8px;
+    }
+    @keyframes skeletonShimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .checkbox-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    .checkbox-row input { width: 18px; height: 18px; accent-color: var(--orange-neon); cursor: pointer; }
+    .checkbox-row label { margin: 0; font-size: 13px; font-weight: 500; text-transform: none; letter-spacing: 0; cursor: pointer; }
+
+    /* =========================================================
+       5. KAMERA & MICRO ANIMATIONS (CORNER BRACKETS + BUTTONS)
+       ========================================================= */
+    #reader-wrapper { 
+      position: relative; width: 100%; border-radius: 14px; overflow: hidden; 
+      background: #000; min-height: 240px; border: 1px solid var(--border-color);
+      transition: all 0.25s ease;
+    }
+    #reader { width: 100%; }
+
+    .cam-corners {
+      position: absolute;
+      inset: 12px;
+      pointer-events: none;
+      z-index: 10;
+      opacity: 0.35;
+      transition: opacity 0.3s ease;
+    }
+    .cam-active .cam-corners {
+      opacity: 1;
+      animation: cornerPulse 1.8s ease-in-out infinite;
+    }
+    .cam-corners span {
+      position: absolute;
+      width: 22px; height: 22px;
+      border-color: var(--orange-neon);
+      border-style: solid;
+    }
+    .cam-corners span:nth-child(1) { top: 0; left: 0; border-width: 3px 0 0 3px; border-top-left-radius: 6px; }
+    .cam-corners span:nth-child(2) { top: 0; right: 0; border-width: 3px 3px 0 0; border-top-right-radius: 6px; }
+    .cam-corners span:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-bottom-left-radius: 6px; }
+    .cam-corners span:nth-child(4) { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-bottom-right-radius: 6px; }
+
+    @keyframes cornerPulse {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(0.97); }
+    }
+
+    .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+    button {
+      padding: 13px 12px; border: none; border-radius: 12px; font-size: 13px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; 
+      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background 0.2s ease;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      position: relative; overflow: hidden;
+    }
+    button:active:not(:disabled) { transform: scale(0.94); }
+    button:disabled { opacity: 0.38; cursor: not-allowed; }
+
+    .btn-cam-start { background: linear-gradient(135deg, #ff7b00, #ff3d00); color: #fff; box-shadow: 0 4px 15px var(--orange-glow); }
+    .btn-cam-stop { background: rgba(0, 0, 0, 0.65); color: var(--orange-bright); border: 1px solid var(--orange-neon); }
+    .btn-torch-off { background: rgba(20, 20, 22, 0.9); color: var(--text-sub); border: 1px solid var(--border-color); }
+    .btn-torch-on { background: #fff; color: #000; box-shadow: 0 0 18px rgba(255, 255, 255, 0.8); }
+    .btn-manual { background: var(--orange-dim); color: var(--orange-bright); width: 100%; margin-top: 10px; border: 1px solid var(--orange-neon); }
+    .btn-manual:hover:not(:disabled) { background: rgba(255, 85, 0, 0.25); }
+
+    /* =========================================================
+       6. VISUAL FEEDBACK (KILATAN WARNA & GETAR SHAKE)
+       ========================================================= */
+    .flash-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 998;
+      opacity: 0;
+    }
+    .flash-success { animation: flashGreen 0.45s ease-out; }
+    .flash-duplicate { animation: flashYellow 0.5s ease-out; }
+    .flash-error { animation: flashRed 0.5s ease-out; }
+
+    @keyframes flashGreen {
+      0%   { opacity: 0.38; background: radial-gradient(circle, transparent 35%, rgba(16, 185, 129, 0.75) 100%); }
+      100% { opacity: 0; }
+    }
+    @keyframes flashYellow {
+      0%   { opacity: 0.42; background: radial-gradient(circle, transparent 35%, rgba(245, 158, 11, 0.8) 100%); }
+      100% { opacity: 0; }
+    }
+    @keyframes flashRed {
+      0%   { opacity: 0.45; background: radial-gradient(circle, transparent 35%, rgba(239, 68, 68, 0.85) 100%); }
+      100% { opacity: 0; }
+    }
+
+    .shake-anim {
+      animation: horizontalShake 0.42s cubic-bezier(.36,.07,.19,.97) both;
+      border-color: var(--red-neon) !important;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.55) !important;
+    }
+    .pulse-success-card {
+      border-color: var(--green-neon) !important;
+      box-shadow: 0 0 22px rgba(16, 185, 129, 0.5) !important;
+    }
+
+    @keyframes horizontalShake {
+      10%, 90% { transform: translate3d(-3px, 0, 0); }
+      20%, 80% { transform: translate3d(5px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-7px, 0, 0); }
+      40%, 60% { transform: translate3d(7px, 0, 0); }
+    }
+
+    /* Bar Status Antrean Sinkronisasi */
+    .sync-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(0, 0, 0, 0.85); border: 1px solid var(--border-color); border-radius: 10px;
+      padding: 10px 14px; margin-bottom: 14px; font-size: 12px;
+      backdrop-filter: blur(6px);
+    }
+    .sync-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #10b981; }
+    .sync-dot.busy { background: #ff6b00; animation: pulse 0.8s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+    #statusBox {
+      display: none; padding: 12px; border-radius: 12px; margin-bottom: 14px;
+      font-size: 13px; font-weight: 700; text-align: center;
+      backdrop-filter: blur(6px);
+      animation: statusPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes statusPop {
+      0%   { transform: scale(0.92); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .status-success { display: block !important; background: rgba(16, 185, 129, 0.22); border: 1px solid #10b981; color: #34d399; }
+    .status-duplicate { display: block !important; background: rgba(245, 158, 11, 0.22); border: 1px solid #f59e0b; color: #fbbf24; }
+    .status-error { display: block !important; background: rgba(239, 68, 68, 0.22); border: 1px solid #ef4444; color: #f87171; }
+
+    /* Riwayat & Micro Animation Slide-In */
+    .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .badge { background: var(--orange-neon); color: #fff; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 800; transition: transform 0.2s ease; }
+    .badge.pop { transform: scale(1.22); }
+    .history-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    
+    .history-item {
+      background: rgba(0, 0, 0, 0.82); padding: 10px 14px; border-radius: 10px; 
+      border-left: 3px solid #f59e0b;
+      display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+      animation: slideInItem 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    @keyframes slideInItem {
+      0%   { opacity: 0; transform: translateY(-12px) scale(0.97); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .history-item.synced { border-left-color: #10b981; }
+    .history-item.dup { border-left-color: #ef4444; opacity: 0.72; }
+    .history-resi { font-weight: 700; color: #fff; font-family: monospace; font-size: 14px; }
+    .history-meta { font-size: 11px; color: var(--text-sub); margin-top: 3px; }
+    .tag-status { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+    .tag-pending { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .tag-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .tag-dup { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+  
+input[type="password"] {width:100%;padding:13px;border:1px solid var(--border-color);border-radius:12px;background:#090604;color:#fff;font-size:15px;}
+small,.hint {display:block;font-size:12px;line-height:1.5;color:var(--text-sub);margin-top:8px;}
+.brand-fallback {font-size:28px;font-weight:900;color:#ff6b00;margin:8px;}
+[hidden], .hidden {display:none !important;}
+.btn-secondary {background:#24160d;color:#ffd3b5;border:1px solid var(--border-color);width:100%;margin-top:10px;}
+.btn-danger {background:#842323;color:#fff;width:100%;margin-top:10px;}
+.history-item {gap:8px;align-items:flex-start;overflow-wrap:anywhere;}
+.history-item > div {min-width:0;}
+.history-actions {display:flex;flex-direction:column;gap:5px;min-width:95px;align-items:flex-end;}
+.history-actions button {font-size:10px;padding:7px;color:#fff;background:#533013;}
+.history-meta {line-height:1.5;}
+summary {cursor:pointer;font-size:13px;font-weight:700;}
+#archiveSummary {white-space:pre-wrap;font-size:12px;line-height:1.6;margin-top:12px;}
+#statusBox {white-space:pre-wrap;overflow-wrap:anywhere;}
+.stats {display:flex;gap:10px;flex-wrap:wrap;font-size:12px;margin-bottom:10px;color:var(--text-sub);}
+@media (prefers-reduced-motion:reduce) {*,*::before,*::after {animation:none!important;transition:none!important;} .bg-video-layer {display:none;}}
+</style>
+</head>
+<body>
+<video class="bg-video-layer" autoplay loop muted playsinline hidden><source type="video/mp4"></video>
+<div class="bg-hud-overlay"></div><div id="flashOverlay" class="flash-overlay" aria-hidden="true"></div>
+<img alt="Robot SPX" id="robotMascot" class="robot-mascot" hidden>
+<main class="container">
+  <header class="header"><img alt="SPX Express" id="brandLogo" class="center-logo" hidden><div id="brandFallback" class="brand-fallback">SPX EXPRESS</div><p>TURBO SCANNER // SPXID06</p></header>
+  <div id="statusBox" role="status" aria-live="polite"></div>
+  <section class="card" id="loginCard">
+    <form id="loginForm"><label for="accessCode">Kode akses operator</label>
+      <input id="accessCode" type="password" autocomplete="off" maxlength="256" required>
+      <button id="loginButton" type="submit" class="btn-manual">HUBUNGKAN DATABASE</button>
+    </form>
+    <small>Kode diberikan pengelola aplikasi. Kode tidak disimpan ke penyimpanan browser. Antrean lama tetap tersedia setelah halaman dibuka kembali.</small>
+  </section>
+  <section class="card" id="kurirCard">
+    <label for="kurirSelect">Target database (kurir)</label>
+    <div id="kurirSkeleton" class="skeleton-box hidden">MEMUAT DAFTAR KURIR...</div>
+    <select id="kurirSelect" class="select-empty" disabled><option value="">-- HUBUNGKAN DATABASE DAHULU --</option></select>
+    <div class="checkbox-row"><input type="checkbox" id="cekDuplikat" checked><label for="cekDuplikat">Blokir duplikat pada kurir yang sama</label></div>
+    <small>Duplikat diperiksa pada sheet kurir aktif, bukan lintas kurir atau seluruh history. Bunyi scan berarti masuk antrean, bukan bukti tersimpan.</small>
+    <button id="refreshButton" class="btn-secondary" disabled>MUAT ULANG DAFTAR KURIR</button>
+    <button id="logoutButton" class="btn-secondary hidden">KELUAR AKSES</button>
+  </section>
+  <div class="sync-bar"><div><span class="sync-dot" id="syncDot"></span><span id="syncText">Belum terhubung</span></div><div id="queueCount">Antrean: 0</div></div>
+  <section class="card" id="scannerCard">
+    <div id="reader-wrapper"><div class="cam-corners" aria-hidden="true"><span></span><span></span><span></span><span></span></div><div id="reader"></div></div>
+    <div class="btn-group"><button id="btnKamera" class="btn-cam-start" disabled>📷 AKTIFKAN KAMERA</button><button id="btnSenter" class="btn-torch-off" disabled>🔦 SENTER</button></div>
+  </section>
+  <section class="card" id="manualCard"><form id="manualForm"><label for="manualInput">Input manual — resi SPXID06</label><input type="text" id="manualInput" maxlength="47" placeholder="SPXID06123456789" autocomplete="off" autocapitalize="characters" spellcheck="false" disabled><button id="manualButton" type="submit" class="btn-manual" disabled>MASUKKAN KE ANTREAN</button></form></section>
+  <section class="card">
+    <div class="history-header"><strong>Riwayat scan</strong><span class="badge" id="scanCounter">0 TERSIMPAN</span></div>
+    <div class="stats"><span id="pendingStat">0 menunggu</span><span id="failedStat">0 perlu ditinjau</span><span id="duplicateStat">0 duplikat</span></div>
+    <div id="historyList" class="history-list"></div>
+    <button id="syncButton" class="btn-secondary" disabled>COBA SINKRONKAN SEKARANG</button>
+    <button id="exportButton" class="btn-secondary">UNDUH CADANGAN ANTREAN / RIWAYAT</button>
+    <small>Menampilkan 100 item terbaru. Cadangan memuat seluruh item lokal tanpa kode akses. Jangan bagikan berkas tersebut secara publik.</small>
+  </section>
+  <section class="card"><details id="adminDetails"><summary>ADMIN — ARSIP SEMUA KURIR</summary>
+    <small>Jeda scan di SEMUA perangkat. Arsip mencakup seluruh sheet kurir resmi, termasuk yang disembunyikan. Kolom A:D dipindahkan ke Resi History lalu dikosongkan; kolom E dan seterusnya tidak diubah.</small>
+    <label for="adminCode" style="margin-top:12px">Kode akses admin</label><input type="password" id="adminCode" maxlength="256" autocomplete="off">
+    <button id="previewButton" class="btn-secondary" disabled>PRATINJAU ARSIP</button>
+    <div id="archiveSummary"></div>
+    <div id="archiveConfirmBox" class="hidden"><label for="archiveConfirm" style="margin-top:12px">Ketik ARSIPKAN untuk melanjutkan</label><input id="archiveConfirm" type="text" autocomplete="off"><button id="archiveButton" class="btn-danger">ARSIPKAN DAN MULAI PERIODE BARU</button></div>
+    <button id="retryArchiveButton" class="btn-danger hidden">PERIKSA / ULANGI ARSIP YANG SAMA</button>
+  </details></section>
+</main>
+<script>
+'use strict';
+// Jika memakai hosting terpisah, gunakan URL deployment /exec backend BARU.
+// Jika index disajikan langsung oleh Apps Script, google.script.run dipakai otomatis.
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxieopzuCaXLv2YMVdqdI_EZD2wZrF_k4H35uXPBKWmxawiKWaY6Lu5m2jJ4hCx6ZxzLw/exec';
+// Hosting terpisah: kosong = aset relatif dalam folder yang sama.
+// Di HTML Service Apps Script: isi URL folder aset HTTPS atau biarkan kosong untuk tampilan tanpa aset.
+const ASSET_BASE_URL = '';
+const RESI_PATTERN = /^SPXID06[A-Z0-9]{1,40}$/;
+const DB_NAME = 'spx-turbo-scanner-v2';
+const SYNC_LOCK = 'spx-turbo-scanner-v2-sync';
+const MAX_PENDING = 2000;
+let db, accessCode='', epoch='', appId='', couriers=[], isSyncing=false, archiveBusy=false;
+let pendingCount=0, archivePending=null, preview=null, storageReady=false, syncTimer;
+let scanner=null, cameraBusy=false, isScanning=false, isTorchOn=false, lastCode='', lastScanTime=0, enqueueBusy=false, audioCtx;
+const channel = typeof BroadcastChannel==='function' ? new BroadcastChannel('spx-turbo-v2') : null;
+const $ = id=>document.getElementById(id);
+
+function tx_(stores,mode,work) {
+  return new Promise((resolve,reject)=>{
+    let tx;
+    try { tx=db.transaction(stores,mode,{durability:'strict'}); }
+    catch(e) { try{tx=db.transaction(stores,mode);}catch(err){reject(err);return;} }
+    let value, customError;
+    tx.oncomplete=()=>resolve(value);
+    tx.onerror=()=>reject(customError||tx.error||new Error('Penyimpanan lokal gagal.'));
+    tx.onabort=()=>reject(customError||tx.error||new Error('Penyimpanan lokal dibatalkan.'));
+    try { work(tx,v=>{value=v;},err=>{customError=err;tx.abort();}); }
+    catch(e){customError=e;tx.abort();}
+  });
+}
+function allItems(){return tx_(['items'],'readonly',(tx,set)=>{tx.objectStore('items').getAll().onsuccess=e=>set(e.target.result);});}
+function getMeta(key){return tx_(['meta'],'readonly',(tx,set)=>{tx.objectStore('meta').get(key).onsuccess=e=>set(e.target.result?.value);});}
+function setMeta(key,value){return tx_(['meta'],'readwrite',tx=>{tx.objectStore('meta').put({key,value});});}
+function openDatabase(){return new Promise((resolve,reject)=>{
+  if(!window.indexedDB){reject(new Error('Browser ini tidak menyediakan penyimpanan IndexedDB. Gunakan browser/perangkat lain.'));return;}
+  const req=indexedDB.open(DB_NAME,1);
+  req.onupgradeneeded=()=>{const d=req.result;d.createObjectStore('items',{keyPath:'id'});d.createObjectStore('meta',{keyPath:'key'});};
+  req.onsuccess=()=>{db=req.result;db.onversionchange=()=>{db.close();storageReady=false;setControls();showStatus('error','Penyimpanan berubah. Muat ulang halaman sebelum melanjutkan.');};resolve();};
+  req.onerror=()=>reject(req.error||new Error('Penyimpanan lokal tidak dapat dibuka.'));
+  req.onblocked=()=>reject(new Error('Tutup tab aplikasi lama, lalu muat ulang halaman ini.'));
+});}
+function newId(prefix='scan'){const a=new Uint32Array(4);crypto.getRandomValues(a);return prefix+'_'+Array.from(a,n=>n.toString(16).padStart(8,'0')).join('');}
+function notify(){if(channel)channel.postMessage('changed');}
+function noteError(e){showStatus('error',e?.message||String(e));}
+function showStatus(type,message){$('statusBox').className='status-'+type;$('statusBox').textContent=message;}
+function updateSync(busy,text){$('syncDot').className=busy?'sync-dot busy':'sync-dot';$('syncText').textContent=text;}
+function setControls(){
+  const ready=storageReady&&!!accessCode&&!!epoch&&!archivePending&&!archiveBusy;
+  ['kurirSelect','manualInput','manualButton','refreshButton','syncButton','previewButton'].forEach(id=>$(id).disabled=!ready);
+  $('btnKamera').disabled=cameraBusy||(!ready&&!isScanning);
+  $('loginCard').classList.toggle('hidden',!!accessCode);
+  $('logoutButton').classList.toggle('hidden',!accessCode);
+  $('retryArchiveButton').classList.toggle('hidden',!archivePending);
+  $('retryArchiveButton').disabled=!accessCode||archiveBusy;
+}
+async function request(payload){
+  const body={...payload,accessCode};
+  if(window.google&&google.script&&google.script.run){
+    let timer;
+    const rpc=new Promise((resolve,reject)=>{
+      timer=setTimeout(()=>reject(new Error('Server belum merespons. Antrean tetap aman di penyimpanan lokal; hasil akan diperiksa ulang.')),70000);
+      google.script.run.withSuccessHandler(v=>{clearTimeout(timer);resolve(v);}).withFailureHandler(err=>{clearTimeout(timer);reject(new Error(err?.message||'Koneksi server gagal.'));}).api(body);
+    });
+    return rpc;
+  }
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(WEB_APP_URL)) throw new Error('URL deployment backend belum valid.');
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),70000);
+  try{
+    const response=await fetch(WEB_APP_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),credentials:'omit',redirect:'follow',signal:controller.signal});
+    if(!response.ok)throw new Error('Server mengembalikan HTTP '+response.status+'. Antrean tidak dihapus.');
+    const text=await response.text();
+    try{return JSON.parse(text);}catch(e){throw new Error('Respons bukan JSON. Periksa deployment/izin akses; untuk akses internal gunakan halaman dari Apps Script.');}
+  }finally{clearTimeout(timer);}
+}
+function requireSuccess(result){if(!result||result.status!=='success'){const e=new Error(result?.message||'Respons server tidak valid.');e.code=result?.code;e.retryable=result?.retryable!==false;throw e;}return result;}
+async function login(event){
+  event?.preventDefault();if(!storageReady)return;
+  const code=$('accessCode').value; if(!code)return;
+  $('loginButton').disabled=true;accessCode=code;
+  try{
+    await loadCouriers();$('accessCode').value='';
+    showStatus('success','Database terhubung. Scan akan disimpan ke antrean lokal terlebih dahulu.');
+    if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
+    if(archivePending){$('adminDetails').open=true;showStatus('duplicate','Ada arsip yang belum terkonfirmasi. Isi kode admin lalu periksa/ulangi arsip yang sama sebelum melanjutkan.');}
+    scheduleSync(50);
+  }catch(e){accessCode='';noteError(e);}
+  finally{$('loginButton').disabled=false;setControls();}
+}
+async function loadCouriers(){
+  $('kurirSkeleton').classList.remove('hidden');
+  try{
+    const result=requireSuccess(await request({action:'list'}));
+    if(!Array.isArray(result.data)||!result.data.length||typeof result.epoch!=='string'||typeof result.appId!=='string')throw new Error('Daftar kurir/periode dari server tidak valid.');
+    const binding=await getMeta('appId');
+    if(binding&&binding!==result.appId)throw new Error('Backend menunjuk spreadsheet berbeda dari penyimpanan perangkat ini. Ekspor cadangan dan gunakan profil browser terpisah; antrean tidak dikirim.');
+    await setMeta('appId',result.appId);
+    const oldEpoch=epoch;epoch=result.epoch;appId=result.appId;couriers=result.data;
+    const selected=$('kurirSelect').value||await getMeta('selectedKurir');
+    $('kurirSelect').replaceChildren(new Option('-- PILIH NAMA KURIR --',''));
+    couriers.forEach(name=>{$('kurirSelect').appendChild(new Option(name,name));});
+    if(couriers.includes(selected))$('kurirSelect').value=selected;
+    onKurirChange();
+    if(oldEpoch&&oldEpoch!==epoch)showStatus('duplicate','Periode sudah berubah setelah arsip. Antrean dari periode lama tidak dipindahkan otomatis.');
+  }finally{$('kurirSkeleton').classList.add('hidden');setControls();}
+}
+function onKurirChange(){const value=$('kurirSelect').value;$('kurirSelect').classList.toggle('select-empty',!value);if(storageReady)setMeta('selectedKurir',value).catch(noteError);}
+async function enqueue(raw){
+  if(!storageReady||!accessCode||!epoch)throw new Error('Hubungkan database dan pastikan penyimpanan lokal siap.');
+  if(archiveBusy)throw new Error('Tunggu proses arsip selesai.');
+  const kurir=$('kurirSelect').value,resi=String(raw).trim().toUpperCase(),cekDuplikat=$('cekDuplikat').checked;
+  if(!couriers.includes(kurir))throw new Error('Pilih nama kurir yang valid terlebih dahulu.');
+  if(!RESI_PATTERN.test(resi))throw new Error('Resi harus SPXID06 diikuti 1–40 huruf/angka.');
+  const item={id:newId(),kurir,resi,cekDuplikat,epoch,appId,status:'pending',createdAt:Date.now(),attempts:0,nextAt:0,message:'Menunggu konfirmasi server.'};
+  await tx_(['items','meta'],'readwrite',(tx,set,abort)=>{
+    tx.objectStore('meta').get('archivePending').onsuccess=e=>{
+      if(e.target.result?.value){abort(new Error('Arsip belum terkonfirmasi. Jangan melanjutkan scan dahulu.'));return;}
+      const store=tx.objectStore('items');
+      store.getAll().onsuccess=e=>{
+        const list=e.target.result;
+        if(list.filter(x=>x.status==='pending').length>=MAX_PENDING){abort(new Error('Antrean mencapai '+MAX_PENDING+' item. Sinkronkan dahulu.'));return;}
+        if(cekDuplikat&&list.some(x=>x.epoch===epoch&&x.kurir===kurir&&x.resi===resi&&['pending','success','duplicate'].includes(x.status))){abort(new Error('DUPLIKAT LOKAL: '+resi+' sudah masuk antrean/tersimpan pada kurir ini.'));return;}
+        store.add(item);set(item);
+      };
+    };
+  }); // Bunyi/indikator baru ditampilkan SETELAH transaksi IndexedDB selesai.
+  tone(true);feedback('success');showStatus('success','MASUK ANTREAN LOKAL: '+resi+' — belum berarti tersimpan di sheet.');
+  await render().catch(noteError);notify();scheduleSync(100);return true;
+}
+async function manualSubmit(event){event.preventDefault();primeAudio();try{if(await enqueue($('manualInput').value)){$('manualInput').value='';$('manualInput').focus();}}catch(e){tone(false);feedback('error');noteError(e);}}
+function scheduleSync(ms=2500){clearTimeout(syncTimer);syncTimer=setTimeout(()=>{sync().catch(noteError).finally(()=>scheduleSync(2500));},ms);}
+async function sync(){
+  if(!storageReady||!accessCode||isSyncing||archiveBusy)return;
+  const run=async()=>{
+    if(isSyncing)return;isSyncing=true;
+    try{
+      archivePending=await getMeta('archivePending');if(archivePending)return;
+      const items=(await allItems()).filter(x=>x.status==='pending'&&(x.nextAt||0)<=Date.now()).sort((a,b)=>a.createdAt-b.createdAt).slice(0,25);
+      if(!items.length)return;
+      if(items.some(x=>x.appId!==appId))throw new Error('Antrean berasal dari backend berbeda. Pengiriman dihentikan.');
+      updateSync(true,'Menyimpan '+items.length+' resi...');
+      try{
+        const result=await request({action:'save',items:items.map(({id,kurir,resi,cekDuplikat,epoch})=>({id,kurir,resi,cekDuplikat,epoch}))});
+        if(result?.code==='UNAUTHORIZED'){accessCode='';throw new Error('Kode operator tidak berlaku. Hubungkan kembali; antrean tetap tersimpan.');}
+        if(result?.status==='success'&&Array.isArray(result.results)){
+          await reconcile(items,result.results);
+          if(result.epoch&&result.epoch!==epoch){epoch=result.epoch;showStatus('duplicate','Periode berubah. Resi yang ditolak karena beda periode perlu ditinjau, bukan dikirim ulang otomatis.');}
+        }else if(result?.retryable===false){await rejectBatch(items,result.code||'REQUEST_REJECTED',result.message||'Permintaan ditolak server.');}
+        else throw new Error(result?.message||'Server sibuk; antrean akan dicoba ulang.');
+      }catch(e){await deferItems(items);showStatus('error',e.message||'Koneksi terputus. Antrean akan dicoba ulang.');}
+    }finally{isSyncing=false;await render();setControls();notify();}
+  };
+  if(navigator.locks?.request)await navigator.locks.request(SYNC_LOCK,{ifAvailable:true},lock=>lock?run():undefined);
+  else await run(); // Server tetap mencegah penulisan ulang menggunakan receipt per ID.
+}
+async function mutateItems(ids,transform){
+  await tx_(['items'],'readwrite',tx=>{
+    const store=tx.objectStore('items');ids.forEach(id=>{store.get(id).onsuccess=e=>{const item=e.target.result;if(item){const next=transform(item);if(next)store.put(next);}};});
+  });
+}
+async function reconcile(sent,results){
+  const sentMap=new Map(sent.map(x=>[x.id,x])), map=new Map();
+  results.forEach(r=>{
+    const original=sentMap.get(r?.id);
+    if(!original||map.has(r.id)||r.resi!==original.resi||r.kurir!==original.kurir||!['success','duplicate','error'].includes(r.status))throw new Error('Hasil server tidak cocok dengan ID/resi/kurir. Antrean dipertahankan untuk diperiksa ulang.');
+    map.set(r.id,r);
+  });
+  await mutateItems(sent.map(x=>x.id),item=>{
+    if(item.status!=='pending')return null;
+    const result=map.get(item.id);
+    if(!result||result.retryable===true)return deferItem(item);
+    return {...item,status:result.status==='error'?'failed':result.status,no:result.no||null,serverTime:result.waktu||'',code:result.code||'',message:result.message||(result.status==='success'?'Tersimpan di spreadsheet.':'Duplikat pada sheet kurir.'),finishedAt:Date.now()};
+  });
+}
+function deferItem(item){const attempts=(item.attempts||0)+1;return {...item,attempts,nextAt:Date.now()+Math.min(60000,2500*Math.pow(2,Math.min(attempts-1,5)))+Math.floor(Math.random()*1000)};}
+async function deferItems(items){await mutateItems(items.map(x=>x.id),item=>item.status==='pending'?deferItem(item):null);}
+async function rejectBatch(items,code,message){await mutateItems(items.map(x=>x.id),item=>item.status==='pending'?{...item,status:'failed',code,message}:null);showStatus('error',message);}
+async function syncNow(){await mutateItems((await allItems()).filter(x=>x.status==='pending').map(x=>x.id),x=>x.status==='pending'?{...x,nextAt:0}:null);scheduleSync(10);}
+async function retryItem(id){
+  if(!accessCode||!epoch||archivePending||archiveBusy)throw new Error('Hubungkan database dan selesaikan arsip dahulu.');
+  const original=(await allItems()).find(x=>x.id===id);if(!original||original.status!=='failed')return;
+  const changeEpoch=original.epoch!==epoch;
+  if(changeEpoch&&!confirm('Periode resi '+original.resi+' sudah berubah. Pastikan resi ini memang perlu dicatat pada periode baru dan bukan mengulang data yang sudah diarsipkan. Pindahkan dengan ID baru?'))return;
+  await tx_(['items','meta'],'readwrite',(tx,set,abort)=>{
+    tx.objectStore('meta').get('archivePending').onsuccess=e=>{
+      if(e.target.result?.value){abort(new Error('Arsip sedang menunggu konfirmasi.'));return;}
+      const store=tx.objectStore('items');store.get(id).onsuccess=e=>{
+        const item=e.target.result;if(!item||item.status!=='failed')return;
+        if(changeEpoch){store.put({...item,status:'reviewed',message:'Dipindahkan ke periode baru setelah konfirmasi operator.'});store.add({...item,id:newId(),epoch,status:'pending',createdAt:Date.now(),attempts:0,nextAt:0,code:'',message:'Menunggu penyimpanan setelah tinjauan periode.'});}
+        else store.put({...item,status:'pending',attempts:0,nextAt:0,code:'',message:'Menunggu percobaan ulang.'});
+      };
+    };
+  });await render();notify();scheduleSync(50);
+}
+async function reviewItem(id){
+  if(!accessCode||archivePending||archiveBusy)throw new Error('Hubungkan database dan selesaikan arsip dahulu.');
+  if(!confirm('Tandai item gagal ini sebagai sudah ditinjau tanpa menyimpannya ke sheet? Pastikan tindak lanjut manual sudah dilakukan. Riwayat tetap disimpan.'))return;
+  await mutateItems([id],x=>x.status==='failed'?{...x,status:'reviewed',message:'Ditinjau operator; tidak dikirim ulang oleh aplikasi.'}:null);await render();notify();
+}
+function elt(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
+async function render(){
+  if(!storageReady)return;
+  const items=await allItems();archivePending=await getMeta('archivePending');
+  pendingCount=items.filter(x=>x.status==='pending').length;
+  const failed=items.filter(x=>x.status==='failed').length,success=items.filter(x=>x.status==='success').length,dup=items.filter(x=>x.status==='duplicate').length;
+  $('queueCount').textContent='Antrean: '+pendingCount;$('pendingStat').textContent=pendingCount+' menunggu';$('failedStat').textContent=failed+' perlu ditinjau';$('duplicateStat').textContent=dup+' duplikat';$('scanCounter').textContent=success+' TERSIMPAN';
+  const list=$('historyList');list.replaceChildren();
+  if(!items.length)list.append(elt('div','hint','Belum ada riwayat pada perangkat ini.'));
+  items.sort((a,b)=>b.createdAt-a.createdAt).slice(0,100).forEach(item=>{
+    const card=elt('div','history-item'+(item.status==='success'?' synced':['failed','duplicate'].includes(item.status)?' dup':''));
+    const content=elt('div'),actions=elt('div','history-actions');
+    content.append(elt('div','history-resi',item.resi),elt('div','history-meta','KURIR: '+item.kurir+' • '+new Date(item.createdAt).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})),elt('div','history-meta',item.message||''));
+    const status=item.status==='success'?'TERSIMPAN #'+item.no:item.status==='duplicate'?'DUPLIKAT SHEET':item.status==='failed'?'PERLU DITINJAU':item.status==='reviewed'?'DITINJAU':'MENUNGGU';
+    actions.append(elt('span','tag-status '+(item.status==='success'?'tag-ok':item.status==='pending'?'tag-pending':'tag-dup'),status));
+    if(item.status==='failed'){
+      const retry=elt('button','',item.epoch!==epoch?'TINJAU PERIODE':'COBA ULANG');retry.disabled=!accessCode||!!archivePending||archiveBusy;retry.addEventListener('click',()=>retryItem(item.id).catch(noteError));actions.append(retry);
+      const done=elt('button','','SUDAH DITINJAU');done.disabled=retry.disabled;done.addEventListener('click',()=>reviewItem(item.id).catch(noteError));actions.append(done);
+    }
+    card.append(content,actions);list.append(card);
+  });
+  if(archivePending)updateSync(true,'Arsip belum terkonfirmasi');
+  else if(isSyncing){} // Pertahankan pesan proses aktif.
+  else if(!accessCode)updateSync(!!pendingCount,'Hubungkan kode operator');
+  else if(pendingCount)updateSync(true,navigator.onLine?'Menunggu sinkronisasi':'Luring — antrean tersimpan lokal');
+  else if(failed)updateSync(false,failed+' item gagal perlu ditinjau');
+  else updateSync(false,'Tidak ada antrean tertunda');
+  setControls();
+}
+async function exportLocal(){
+  if(!storageReady)throw new Error('Penyimpanan lokal belum tersedia.');
+  const data={format:'SPX_SCANNER_V2_BACKUP',exportedAt:new Date().toISOString(),appId:await getMeta('appId'),items:await allItems(),archivePending:await getMeta('archivePending')||null};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=elt('a');a.href=url;a.download='SPX-cadangan-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
+async function previewArchive(){
+  if(!accessCode)throw new Error('Hubungkan kode operator terlebih dahulu.');
+  if(!$('adminCode').value)throw new Error('Masukkan kode admin.');
+  if(isSyncing||archiveBusy)throw new Error('Tunggu sinkronisasi/proses arsip selesai.');
+  const items=await allItems();if(items.some(x=>['pending','failed'].includes(x.status)))throw new Error('Selesaikan seluruh antrean dan tinjau item gagal pada perangkat ini sebelum arsip.');
+  archivePending=await getMeta('archivePending');if(archivePending)throw new Error('Selesaikan pemeriksaan arsip sebelumnya.');
+  archiveBusy=true;setControls();
+  try{
+    if(isScanning)await stopCamera();
+    preview=requireSuccess(await request({action:'archive_preview',adminCode:$('adminCode').value}));
+    $('archiveSummary').textContent='Total: '+preview.total+' resi dari '+preview.kurir.length+' kurir.\nPratinjau berlaku '+preview.expiresInSeconds+' detik.\nPastikan semua perangkat sudah berhenti scan. Arsip kosong juga memulai periode baru.';
+    $('archiveConfirm').value='';$('archiveConfirmBox').classList.remove('hidden');
+  }finally{archiveBusy=false;setControls();}
+}
+async function beginArchive(){
+  if(!preview)throw new Error('Buat pratinjau dahulu.');
+  if($('archiveConfirm').value!=='ARSIPKAN')throw new Error('Ketik ARSIPKAN tepat seperti petunjuk.');
+  if(!accessCode||!$('adminCode').value)throw new Error('Kode operator dan kode admin diperlukan.');
+  if(isSyncing||archiveBusy)throw new Error('Tunggu proses sebelumnya selesai.');
+  const plannedArchive={id:newId('archive'),ticket:preview.ticket,confirm:'ARSIPKAN',createdAt:Date.now()};
+  archiveBusy=true;setControls();
+  try{
+    await tx_(['items','meta'],'readwrite',(tx,set,abort)=>{
+      tx.objectStore('meta').get('archivePending').onsuccess=e=>{
+        if(e.target.result?.value){abort(new Error('Arsip sebelumnya belum terkonfirmasi.'));return;}
+        tx.objectStore('items').getAll().onsuccess=e=>{
+          if(e.target.result.some(x=>['pending','failed'].includes(x.status))){abort(new Error('Ada antrean/item gagal baru. Selesaikan dahulu.'));return;}
+          tx.objectStore('meta').put({key:'archivePending',value:plannedArchive});
+        };
+      };
+    });
+    archivePending=plannedArchive;
+    $('archiveConfirmBox').classList.add('hidden');preview=null;notify();
+  }finally{archiveBusy=false;setControls();}
+  await resumeArchive();
+}
+async function resumeArchive(){
+  if(!accessCode||!$('adminCode').value)throw new Error('Masukkan kode operator dan admin untuk memeriksa arsip.');
+  if(archiveBusy||isSyncing)return;
+  archiveBusy=true;setControls();
+  try{
+    archivePending=await getMeta('archivePending');if(!archivePending)return;
+    const result=await request({action:'archive',adminCode:$('adminCode').value,...archivePending});
+    if(result?.status==='success'){
+      await setMeta('archivePending',null);archivePending=null;epoch=result.epoch;
+      $('adminCode').value='';$('archiveSummary').textContent=result.message;
+      showStatus('success',result.message+' Perangkat lain perlu memuat ulang daftar kurir.');
+      notify();
+    }else if(result?.retryable===false&&!['ADMIN_UNAUTHORIZED','UNAUTHORIZED'].includes(result.code)){
+      // Penolakan terdefinisi = tidak ada mutasi baru oleh permintaan ini.
+      // ID_CONFLICT/LEDGER_CORRUPT tidak boleh dibuka otomatis karena integritas belum pasti.
+      if(['ID_CONFLICT','LEDGER_CORRUPT','SETUP_REQUIRED'].includes(result.code))throw new Error(result.message+' Kunci arsip dipertahankan; hubungi pengelola.');
+      await setMeta('archivePending',null);archivePending=null;notify();
+      throw new Error(result.message+' Tidak ada transaksi baru dilakukan oleh permintaan ini; buat pratinjau ulang.');
+    }else throw new Error(result?.message||'Hasil arsip belum pasti; periksa/ulangi dengan ID yang sama.');
+  }catch(e){showStatus('error',e.message+(archivePending?' Scan dikunci sampai arsip yang sama terkonfirmasi.':''));}
+  finally{archiveBusy=false;await render();setControls();}
+}
+async function toggleCamera(){
+  primeAudio();
+  if(cameraBusy)return;
+  if(isScanning){await stopCamera();return;}
+  if(!accessCode||archivePending||archiveBusy)throw new Error('Hubungkan database dan selesaikan arsip dahulu.');
+  if(!$('kurirSelect').value)throw new Error('Pilih kurir dahulu.');
+  if(!window.isSecureContext)throw new Error('Kamera memerlukan halaman HTTPS.');
+  if(typeof Html5Qrcode!=='function')throw new Error('Pustaka kamera belum termuat. Periksa koneksi atau gunakan input manual.');
+  cameraBusy=true;setControls();
+  try{
+    if(!scanner)scanner=new Html5Qrcode('reader');
+    await scanner.start({facingMode:'environment'},{fps:15,aspectRatio:1.333334,qrbox:(w,h)=>({width:Math.max(50,Math.floor(w*0.9)),height:Math.max(50,Math.floor(h*0.75))})},onDecoded,()=>{});
+    isScanning=true;$('reader-wrapper').classList.add('cam-active');$('btnKamera').textContent='⏹ MATIKAN KAMERA';$('btnKamera').className='btn-cam-stop';
+    let torch=false;try{const track=$('reader').querySelector('video')?.srcObject?.getVideoTracks()[0];torch=!!track?.getCapabilities?.().torch;}catch(e){}
+    $('btnSenter').disabled=!torch;
+  }catch(e){showStatus('error','Kamera tidak dapat diaktifkan: '+String(e?.message||e)+'. Periksa izin kamera atau gunakan input manual.');}
+  finally{cameraBusy=false;setControls();}
+}
+async function stopCamera(){
+  if(!scanner||!isScanning)return;
+  cameraBusy=true;setControls();
+  try{
+    if(isTorchOn){try{await scanner.applyVideoConstraints({advanced:[{torch:false}]});}catch(e){}}
+    await scanner.stop();isScanning=false;
+  }catch(e){
+    // Hentikan track langsung jika operasi stop pustaka gagal.
+    const tracks=$('reader').querySelector('video')?.srcObject?.getTracks()||[];tracks.forEach(t=>t.stop());
+    isScanning=false;try{scanner.clear();}catch(ignore){}scanner=null;
+    showStatus('error','Kamera dihentikan melalui pelepasan track. Aktifkan ulang bila diperlukan.');
+  }finally{isTorchOn=false;cameraBusy=false;$('reader-wrapper').classList.remove('cam-active');$('btnKamera').textContent='📷 AKTIFKAN KAMERA';$('btnKamera').className='btn-cam-start';$('btnSenter').textContent='🔦 SENTER';$('btnSenter').className='btn-torch-off';$('btnSenter').disabled=true;setControls();}
+}
+async function toggleTorch(){
+  if(!isScanning||!scanner)return;
+  $('btnSenter').disabled=true;
+  try{const state=!isTorchOn;await scanner.applyVideoConstraints({advanced:[{torch:state}]});isTorchOn=state;$('btnSenter').textContent=state?'🔦 SENTER ON':'🔦 SENTER';$('btnSenter').className=state?'btn-torch-on':'btn-torch-off';}
+  catch(e){showStatus('error','Senter tidak didukung atau tidak dapat diubah pada perangkat ini.');}
+  finally{$('btnSenter').disabled=!isScanning;}
+}
+async function onDecoded(text){
+  const normalized=String(text).trim().toUpperCase(),now=Date.now();
+  if(enqueueBusy||(normalized===lastCode&&now-lastScanTime<1500))return;
+  lastCode=normalized;lastScanTime=now;enqueueBusy=true;
+  try{await enqueue(normalized);}catch(e){tone(false);feedback('error');noteError(e);}finally{enqueueBusy=false;}
+}
+function primeAudio(){
+  try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;if(!audioCtx)audioCtx=new Audio();if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});}catch(e){}
+}
+function tone(ok){
+  try{
+    primeAudio();if(!audioCtx)return;
+    const osc=audioCtx.createOscillator(),gain=audioCtx.createGain(),now=audioCtx.currentTime;
+    osc.type='sine';osc.frequency.setValueAtTime(ok?1800:250,now);gain.gain.setValueAtTime(0.0001,now);gain.gain.exponentialRampToValueAtTime(0.12,now+0.01);gain.gain.exponentialRampToValueAtTime(0.0001,now+(ok?0.1:0.25));osc.connect(gain);gain.connect(audioCtx.destination);osc.onended=()=>{osc.disconnect();gain.disconnect();};osc.start(now);osc.stop(now+(ok?0.12:0.27));
+    if(navigator.vibrate)navigator.vibrate(ok?50:[90,40,90]);
+  }catch(e){}
+}
+function feedback(type){const flash=$('flashOverlay');flash.className='flash-overlay';void flash.offsetWidth;flash.classList.add('flash-'+type);}
+function initAssets(){
+  const inAppsScript=!!(window.google&&google.script&&google.script.run);
+  if(inAppsScript&&!ASSET_BASE_URL)return; // Tidak mengarang URL aset relatif pada HTML Service.
+  const base=ASSET_BASE_URL?ASSET_BASE_URL.replace(/\/$/,'')+'/':'';
+  const logo=$('brandLogo');logo.onload=()=>{logo.hidden=false;$('brandFallback').hidden=true;};logo.onerror=()=>{logo.hidden=true;$('brandFallback').hidden=false;};logo.src=base+'Logo%20SPX.png';
+  const robot=$('robotMascot');robot.onload=()=>robot.hidden=false;robot.onerror=()=>robot.hidden=true;robot.src=base+'robot-spx.gif.gif';
+  const video=document.querySelector('.bg-video-layer');video.querySelector('source').src=base+'bg-hud.mp4.mp4';video.addEventListener('canplay',()=>{video.hidden=false;video.play().catch(()=>{});},{once:true});video.addEventListener('error',()=>video.hidden=true,true);video.load();
+}
+async function logout(){
+  if(isScanning)await stopCamera();accessCode='';$('accessCode').value='';$('adminCode').value='';preview=null;$('archiveConfirmBox').classList.add('hidden');setControls();await render();showStatus('duplicate','Akses dikeluarkan. Antrean lokal tidak dihapus.');
+}
+async function main(){
+  initAssets();
+  $('loginForm').addEventListener('submit',login);$('manualForm').addEventListener('submit',e=>manualSubmit(e).catch(noteError));$('kurirSelect').addEventListener('change',onKurirChange);
+  $('btnKamera').addEventListener('click',()=>toggleCamera().catch(noteError));$('btnSenter').addEventListener('click',()=>toggleTorch().catch(noteError));
+  $('refreshButton').addEventListener('click',()=>loadCouriers().catch(noteError));$('syncButton').addEventListener('click',()=>syncNow().catch(noteError));$('exportButton').addEventListener('click',()=>exportLocal().catch(noteError));$('logoutButton').addEventListener('click',()=>logout().catch(noteError));
+  $('previewButton').addEventListener('click',()=>previewArchive().catch(noteError));$('archiveButton').addEventListener('click',()=>beginArchive().catch(noteError));$('retryArchiveButton').addEventListener('click',()=>resumeArchive().catch(noteError));
+  try{await openDatabase();storageReady=true;await render();showStatus('duplicate','Masukkan kode operator untuk menghubungkan database. Riwayat perangkat dimuat dari penyimpanan lokal.');}
+  catch(e){storageReady=false;$('loginButton').disabled=true;showStatus('error','Penyimpanan lokal tidak siap. Scan dinonaktifkan agar tidak menerima antrean tanpa cadangan. '+(e.message||e));}
+  setControls();scheduleSync();
+}
+if(channel)channel.onmessage=()=>{if(storageReady)render().catch(noteError);};
+window.addEventListener('online',()=>scheduleSync(20));window.addEventListener('offline',()=>render().catch(noteError));
+window.addEventListener('beforeunload',e=>{if(pendingCount||archivePending||isSyncing){e.preventDefault();e.returnValue='';}});
+window.addEventListener('pagehide',()=>{const tracks=$('reader').querySelector('video')?.srcObject?.getTracks()||[];tracks.forEach(t=>t.stop());});
+window.addEventListener('pageshow',e=>{if(e.persisted){isScanning=false;isTorchOn=false;$('btnKamera').textContent='📷 AKTIFKAN KAMERA';$('btnKamera').className='btn-cam-start';$('btnSenter').disabled=true;$('reader-wrapper').classList.remove('cam-active');scanner=null;setControls();}});
+main().catch(noteError);
+</script>
+</body>
+</html>
